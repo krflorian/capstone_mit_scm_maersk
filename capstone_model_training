@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Oct 29 11:41:23 2018
+
+@author: drx
+"""
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor 
+from sklearn import preprocessing
+from sklearn.model_selection import train_test_split
+import os
+import datetime
+
+os.chdir('/media/shareddata/MIT/Capstone')
+os.getcwd()
+
+
+#train test split
+X_new['y'] = y
+X_new = X_new.dropna()
+y = X_new['y']
+X_new = X_new.loc[:,X_new.columns != 'y']
+
+X_train, X_test, y_train, y_test = train_test_split(
+        X_new, y, test_size=0.35, random_state=0)
+
+
+#train RANDOM FOREST
+
+regr = RandomForestRegressor(n_estimators = 10,
+                             criterion = 'mae',
+                             random_state = 1992,
+                             )
+regr.fit(X_train, y_train)
+
+feature_importance = pd.DataFrame(X_train.columns,
+                                  regr.feature_importances_)
+feature_importance
+
+y_hat = regr.predict(X_test)
+
+regr.score(X_test, y_test)
+
+test_data = pd.DataFrame(data = {'y_hat': y_hat})
+test_data['y_test'] = y_test
+test_data
+
+print(['features:', X_test.columns,
+       'mean absolute error: ', round(np.mean(abs(y_hat-y_test)), 2),
+       'mean absolute percentage error:', round(np.mean(abs(y_hat-y_test)/y_test), 4)
+       ])
+y_test
+np.mean(abs(y_hat-y_test)/y_test)
+a = abs(y_hat-y_test)/y_test
+
+now = datetime.datetime.now()
+
+filename = 'data/models/randomforest' + ''.join(['_', str(now.month), '_', str(now.day)]) +'.joblib'
+
+from sklearn.externals import joblib
+joblib.dump(regr, filename) 
+
+#joblib.load('data/models/randomforest_10_29.joblib') 
+
+
+#loaded_model = pickle.load(open(filename, 'rb'))
+
+
+
+
+
+customer_clean['absolute error'] = abs(y_hat-y)
+customer_clean['y'] = y
+customer_clean['y_hat'] = y_hat
+
+customer_filter = customer_clean[customer_clean['absolute error'] > 2]
+customer_filter = customer_filter[[
+        'Carrier',
+        'Shipper',
+        'Original Port Of Loading',
+        'Original Port Of Loading Site',
+        'Final Port Of Discharge',
+        'Final Port Of Discharge Site',
+        'schedule_miss',
+        'absolute error', 'y', 'y_hat']]
+
+test = customer_clean[customer_clean['Original Port Of Loading Site'] == 'SPAIN']
+np.mean(test['absolute error'])
+
+customer_clean['Original Port Of Loading Site']
+
