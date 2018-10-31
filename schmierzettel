@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Oct 30 19:13:43 2018
+
+@author: drx
+"""
+
+import os
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor 
+from sklearn import preprocessing
+from sklearn.model_selection import train_test_split
+
+
+
+
+os.chdir('/media/shareddata/MIT/Capstone')
+os.getcwd()
+
+customer = pd.read_csv('data/data2.csv')
+
+#histograms
+#groups carrier + route
+groups = customer.groupby(['Carrier',
+                            'Original Port Of Loading',
+                            'Final Port Of Discharge'])
+see = groups.agg(np.size).ATA
+print(see.min())
+print(see.max())
+
+see.plot.hist(grid=True, bins=20, rwidth=0.9, color='#607c8e')
+              
+#groups only route
+groups = customer.groupby(['Original Port Of Loading',
+                            'Final Port Of Discharge'])
+see = groups.agg(np.size).ATA
+print(see.min())
+print(see.max())
+
+see.plot.hist(grid=True, bins=20, rwidth=0.9, color='#607c8e')
+
+
+              
+#start              
+              
+              
+groups.agg(np.size).ATA > 1000
+
+
+customer_clean = (customer.loc[customer['ATA'].notna()]
+                          .loc[customer['ATD'].notna()]
+                          .loc[:,['Carrier', 'ATA', 'ATD', 'ETD',
+                                  'Original Port Of Loading',
+                                  'Final Port Of Discharge']])
+# get date to right format
+date_columns = ['ATA', 'ATD', 'ETD']
+
+for column in date_columns:
+    customer_clean[column] = pd.to_datetime(customer_clean[column])
+    print(['finished converting column', column, 'to date'])
+
+#get y column
+customer_clean['y'] = customer_clean['ATA'] -  customer_clean['ATD']
+customer_clean['y'] = customer_clean['y'].dt.days
+customer_clean['y']
+
+customer_clean.dtypes
+
+
+#get group summary
+groups = customer_clean.groupby(['Carrier',
+                                 'Original Port Of Loading',
+                                 'Final Port Of Discharge'])
+
+summary = groups['y'].agg([np.size, np.mean, np.median, np.std])
+
+
+
+#random forest
+X = ['']
+
+X_train, X_test, y_train, y_test = train_test_split(customer_clean[X],
+                                                    customer_clean['y'],
+                                                    test_size=0.35,
+                                                    random_state=1992)
+
+regr = RandomForestRegressor(n_estimators = 10,
+                             criterion = 'mae',
+                             random_state = 1992,
+                             )
+regr.fit(X_train, y_train)
+
+feature_importance = pd.DataFrame(X_train.columns,
+                                  regr.feature_importances_)
+feature_importance
+
+y_hat = regr.predict(X_test)
+
+
+
+
