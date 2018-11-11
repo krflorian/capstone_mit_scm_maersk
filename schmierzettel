@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor 
 from sklearn import preprocessing
+from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import OneHotEncoder
 from sklearn.model_selection import train_test_split
 
 
@@ -19,65 +21,23 @@ from sklearn.model_selection import train_test_split
 os.chdir('/media/shareddata/MIT/Capstone')
 os.getcwd()
 
-customer = pd.read_csv('data/data2.csv')
 
-#histograms
-#groups carrier + route
-groups = customer.groupby(['Carrier',
-                            'Original Port Of Loading',
-                            'Final Port Of Discharge'])
-see = groups.agg(np.size).ATA
-print(see.min())
-print(see.max())
+#######################################################################
+## get valid routes 
+######################################################################
 
-see.plot.hist(grid=True, bins=20, rwidth=0.9, color='#607c8e')
-              
-#groups only route
-groups = customer.groupby(['Original Port Of Loading',
-                            'Final Port Of Discharge'])
-see = groups.agg(np.size).ATA
-print(see.min())
-print(see.max())
+tryhard = customer_clean.set_index(["Carrier",
+                          'Original Port Of Loading',
+                          'Final Port Of Discharge'])
 
-see.plot.hist(grid=True, bins=20, rwidth=0.9, color='#607c8e')
+for i in range(0,len(tryhard)):
+    print(tryhard.index[i] in valid_routes)
 
-
-              
-#start              
-              
-              
-groups.agg(np.size).ATA > 1000
-
-
-customer_clean = (customer.loc[customer['ATA'].notna()]
-                          .loc[customer['ATD'].notna()]
-                          .loc[:,['Carrier', 'ATA', 'ATD', 'ETD',
-                                  'Original Port Of Loading',
-                                  'Final Port Of Discharge']])
-# get date to right format
-date_columns = ['ATA', 'ATD', 'ETD']
-
-for column in date_columns:
-    customer_clean[column] = pd.to_datetime(customer_clean[column])
-    print(['finished converting column', column, 'to date'])
-
-#get y column
-customer_clean['y'] = customer_clean['ATA'] -  customer_clean['ATD']
-customer_clean['y'] = customer_clean['y'].dt.days
-customer_clean['y']
-
-customer_clean.dtypes
-
-
-#get group summary
-groups = customer_clean.groupby(['Carrier',
-                                 'Original Port Of Loading',
-                                 'Final Port Of Discharge'])
-
-summary = groups['y'].agg([np.size, np.mean, np.median, np.std])
+tryhard.loc[tryhard.index.isin(valid_routes)]
 
 
 
+###############################################################
 #random forest
 X = ['']
 
@@ -99,5 +59,44 @@ feature_importance
 y_hat = regr.predict(X_test)
 
 
+
+
+
+see.plot.hist(grid=True, bins=10, rwidth=0.9, color='#607c8e')
+
+
+              
+              
+
+
+"""
+    see milestones - not in real skript
+    
+"""
+
+
+
+#calculations
+#for column in date_columns:
+#    print([column, (customer[column][5] - customer['Earliest Receipt Date'][5]).days])
+#
+#customer['ATA'][0] - customer['Receipt Date'][0]
+
+
+# get milestone order
+dates = customer_clean[date_columns]
+milestone = dates[15:17].transpose().reset_index().copy()
+milestone.columns = ['names', 'row1', 'row2']
+
+milestone = milestone.sort_values(by=['row1'])
+
+milestone
+#write excel
+writer = pd.ExcelWriter('milestones2.xlsx')
+milestone.to_excel(writer, 'sheet1')
+writer.save()
+
+
+milestone
 
 
