@@ -28,12 +28,7 @@ customer_clean = (customer.loc[customer['ATA'].notna()]
                           .loc[customer['ATD'].notna()]
                           .loc[:,['Carrier', 'ATA', 'ATD', 'ETD',
                                   'Original Port Of Loading',
-                                 'Final Port Of Discharge']]
-                          .set_index(['Carrier',
-                                      'Original Port Of Loading',
-                                      'Final Port Of Discharge']))
-
-customer_clean = customer_clean.loc[customer_clean.index.isin(valid_routes)]
+                                 'Final Port Of Discharge']])
 
 # get date to right format
 date_columns = ['ATA', 'ATD', 'ETD']
@@ -45,12 +40,12 @@ for column in date_columns:
 #get y column
 customer_clean['y'] = customer_clean['ATA'] -  customer_clean['ATD']
 customer_clean['y'] = customer_clean['y'].dt.days
-customer_clean['y']
+#customer_clean['y']
 
 #schedule miss
 customer_clean['schedule_miss'] = customer_clean['ETD'] - customer_clean['ATD']
 customer_clean['schedule_miss'] = customer_clean['schedule_miss'].dt.days
-customer_clean['schedule_miss']
+#customer_clean['schedule_miss']
 
 
 # day of week / Quarter
@@ -60,8 +55,17 @@ customer_clean = customer_clean.join(pd.get_dummies(customer_clean['weekday']))
 customer_clean['quarter'] = customer_clean['ETD'].dt.quarter
 customer_clean = customer_clean.join(pd.get_dummies(customer_clean['quarter']))
 
+# filter valid routes
+customer_clean = customer_clean.set_index(['Carrier',
+                                           'Original Port Of Loading',
+                                           'Final Port Of Discharge'])
 
+customer_clean = customer_clean.loc[customer_clean.index.isin(valid_routes)]
 
+# get route statistics
+customer_clean = customer_clean.join(summary[['median', 'std']])
+
+customer_clean.to_csv("data/customer_clean")
 
 ###########################################################
 # SUMMARY Statistics - valid routes

@@ -10,21 +10,23 @@ import pandas as pd
 from sklearn.ensemble import RandomForestRegressor 
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
+from sklearn import metrics
 import os
 import datetime
 
 os.chdir('/media/shareddata/MIT/Capstone')
 os.getcwd()
 
+customer_clean = pd.read_csv('data/customer_clean')
 
+customer_clean = customer_clean.reset_index(drop=True)
 #train test split
-X_new['y'] = y
-X_new = X_new.dropna()
-y = X_new['y']
-X_new = X_new.loc[:,X_new.columns != 'y']
+X = customer_clean[['schedule_miss', 1,2,3,'median', 'std']]
+
+y = customer_clean['y']
 
 X_train, X_test, y_train, y_test = train_test_split(
-        X_new, y, test_size=0.35, random_state=0)
+        X, y, test_size=0.30, random_state=1992)
 
 
 #train RANDOM FOREST
@@ -37,23 +39,23 @@ regr.fit(X_train, y_train)
 
 feature_importance = pd.DataFrame(X_train.columns,
                                   regr.feature_importances_)
-feature_importance
+print(feature_importance)
 
 y_hat = regr.predict(X_test)
 
-regr.score(X_test, y_test)
+print(regr.score(X_test, y_test))
 
-test_data = pd.DataFrame(data = {'y_hat': y_hat})
-test_data['y_test'] = y_test
-test_data
+test_data = pd.DataFrame(data = {'y_hat': y_hat,
+                                 'y_test': y_test})
 
-print(['features:', X_test.columns,
-       'mean absolute error: ', round(np.mean(abs(y_hat-y_test)), 2),
-       'mean absolute percentage error:', round(np.mean(abs(y_hat-y_test)/y_test), 4)
-       ])
-y_test
-np.mean(abs(y_hat-y_test)/y_test)
-a = abs(y_hat-y_test)/y_test
+print('features: ', feature_importance, "\n",
+      'MAE: ', round(np.mean(abs(y_hat-y_test)), 2), "\n",
+      'MAPE: ', round(np.mean(abs(y_hat-y_test)/y_test), 4), "\n",
+      'RMSE: ', round(np.sqrt(np.mean((y_test - y_hat)**2)), 2), "\n"
+      ' R2: ', round(metrics.r2_score(y_test, y_hat),2)
+       )
+
+#np.mean(abs(y_hat-y_test)/y_test)
 
 now = datetime.datetime.now()
 
@@ -66,10 +68,6 @@ joblib.dump(regr, filename)
 
 
 #loaded_model = pickle.load(open(filename, 'rb'))
-
-
-
-
 
 customer_clean['absolute error'] = abs(y_hat-y)
 customer_clean['y'] = y
@@ -90,4 +88,15 @@ test = customer_clean[customer_clean['Original Port Of Loading Site'] == 'SPAIN'
 np.mean(test['absolute error'])
 
 customer_clean['Original Port Of Loading Site']
+
+
+import matplotlib.pyplot as plt
+plt.hist(X.loc[X["schedule_miss"] > -7]["schedule_miss"], bins=20)
+
+plt.show()
+np.log(-)
+
+
+np.log(X["schedule_miss"]+0.001)
+X["schedule_miss"]+0.01
 
