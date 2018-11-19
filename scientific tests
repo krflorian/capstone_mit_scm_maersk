@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Nov 16 10:31:50 2018
+
+@author: Florian Krempl
+"""
+
+# hypothesis
+# is schedule miss mean the same as on schedule shipments?
+
+summary = customer_clean.groupby(['Carrier',
+              'Original Port Of Loading',
+              'Final Port Of Discharge'])['y'].agg([np.mean, np.std, np.median, np.count_nonzero])
+
+summary = summary.reset_index()
+
+customer_clean = customer_clean.merge(summary,
+                     on = ['Carrier',
+                           'Original Port Of Loading',
+                           'Final Port Of Discharge'],
+                     how = 'inner')
+
+customer_clean["zscore"] = (customer_clean["y"] - customer_clean["mean"]) / customer_clean["std"]
+customer_clean["zscore"] = np.where(customer_clean["std"] == 0, 0, customer_clean["zscore"])
+customer_clean = customer_clean.loc[customer_clean["zscore"].notna()]
+
+plt.hist(customer_clean[customer_clean["schedule_miss"] == 0]["zscore"])
+plt.show()
+plt.hist(customer_clean[customer_clean["schedule_miss"] != 0]["zscore"])
+plt.show()
+
+stats.ttest_ind(customer_clean[customer_clean["schedule_miss"] == 0]["zscore"],
+                customer_clean[customer_clean["schedule_miss"] != 0]["zscore"])
+
+# we can dismiss the hypothesis that the mean is the same
+# in the plots it is visible that if the ship misses the planned schedule it will need more time on average
+
+
+

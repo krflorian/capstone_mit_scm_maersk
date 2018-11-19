@@ -8,9 +8,9 @@ Created on Mon Oct 29 11:41:23 2018
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor 
-from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
+from sklearn.externals import joblib
 import os
 import datetime
 
@@ -19,23 +19,29 @@ os.getcwd()
 
 customer_clean = pd.read_csv('data/customer_clean')
 
-customer_clean = customer_clean.reset_index(drop=True)
+#customer_clean = customer_clean.reset_index(drop=True)
 #train test split
-X = customer_clean[['schedule_miss', 1,2,3,'median', 'std']]
+X = customer_clean[['schedule_miss', "1","2","3",'median', 'std']]
 
 y = customer_clean['y']
 
 X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.30, random_state=1992)
 
+############################################
+##   train RANDOM FOREST
+############################################
 
-#train RANDOM FOREST
-
+regr = joblib.load('data/models/randomforest_11_11.joblib')
 regr = RandomForestRegressor(n_estimators = 10,
                              criterion = 'mae',
                              random_state = 1992,
                              )
 regr.fit(X_train, y_train)
+
+###########################################
+##  get model metrics
+###########################################
 
 feature_importance = pd.DataFrame(X_train.columns,
                                   regr.feature_importances_)
@@ -48,14 +54,22 @@ print(regr.score(X_test, y_test))
 test_data = pd.DataFrame(data = {'y_hat': y_hat,
                                  'y_test': y_test})
 
-print('features: ', feature_importance, "\n",
-      'MAE: ', round(np.mean(abs(y_hat-y_test)), 2), "\n",
-      'MAPE: ', round(np.mean(abs(y_hat-y_test)/y_test), 4), "\n",
-      'RMSE: ', round(np.sqrt(np.mean((y_test - y_hat)**2)), 2), "\n"
-      ' R2: ', round(metrics.r2_score(y_test, y_hat),2)
-       )
+def print_metrics(y_hat, y_test):
+    output = print('features: ', feature_importance, "\n",
+                   'MAE: ', round(np.mean(abs(y_hat-y_test)), 2), "\n",
+                   'MAPE: ', round(np.mean(abs(y_hat-y_test)/y_test), 4), "\n",
+                   'RMSE: ', round(np.sqrt(np.mean((y_test - y_hat)**2)), 2), "\n"
+                   ' R2: ', round(metrics.r2_score(y_test, y_hat),2)
+                   )
+    return output
+
+print_metrics(test_data["y_hat"], test_data["y_test"])
 
 #np.mean(abs(y_hat-y_test)/y_test)
+
+###################################################
+##      save model
+###################################################
 
 now = datetime.datetime.now()
 
@@ -64,39 +78,4 @@ filename = 'data/models/randomforest' + ''.join(['_', str(now.month), '_', str(n
 from sklearn.externals import joblib
 joblib.dump(regr, filename) 
 
-#joblib.load('data/models/randomforest_10_29.joblib') 
-
-
-#loaded_model = pickle.load(open(filename, 'rb'))
-
-customer_clean['absolute error'] = abs(y_hat-y)
-customer_clean['y'] = y
-customer_clean['y_hat'] = y_hat
-
-customer_filter = customer_clean[customer_clean['absolute error'] > 2]
-customer_filter = customer_filter[[
-        'Carrier',
-        'Shipper',
-        'Original Port Of Loading',
-        'Original Port Of Loading Site',
-        'Final Port Of Discharge',
-        'Final Port Of Discharge Site',
-        'schedule_miss',
-        'absolute error', 'y', 'y_hat']]
-
-test = customer_clean[customer_clean['Original Port Of Loading Site'] == 'SPAIN']
-np.mean(test['absolute error'])
-
-customer_clean['Original Port Of Loading Site']
-
-
-import matplotlib.pyplot as plt
-plt.hist(X.loc[X["schedule_miss"] > -7]["schedule_miss"], bins=20)
-
-plt.show()
-np.log(-)
-
-
-np.log(X["schedule_miss"]+0.001)
-X["schedule_miss"]+0.01
 

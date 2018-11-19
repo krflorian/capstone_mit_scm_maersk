@@ -15,7 +15,9 @@ from sklearn.model_selection import train_test_split
 os.chdir('/media/shareddata/MIT/Capstone')
 os.getcwd()
 
-customer = pd.read_csv('data/data2.csv')
+# customer = pd.read_csv('data/data2.csv')
+
+# customer = pd.read_csv('data/Capstone Project data/USWA Oct15-Sept18.csv')
 summary = pd.read_csv('data/valid_routes.csv')
 summary = summary.set_index(['Carrier',
                              'Original Port Of Loading',
@@ -24,6 +26,12 @@ summary = summary.set_index(['Carrier',
 valid_routes = summary.index.values.tolist()
 
 # clean data
+# get real carrier
+customer["Carrier"] = np.where(customer['VOCC Carrier'].isna,
+        customer["CBL Number"],    #"Carrier SCAC"
+        customer["VOCC Carrier"])
+
+# get rid of missing data - select right columns
 customer_clean = (customer.loc[customer['ATA'].notna()]
                           .loc[customer['ATD'].notna()]
                           .loc[:,['Carrier', 'ATA', 'ATD', 'ETD',
@@ -79,7 +87,7 @@ summary = summary.sort_values("count_nonzero", ascending=0)
 n_obs = sum(summary["count_nonzero"])
 summary["percent_of_total"] = summary["count_nonzero"] / n_obs
 summary["cum_of_total"] = summary["percent_of_total"].cumsum()
-summary = summary.loc[summary["cum_of_total"] < 0.9]
+summary = summary.loc[summary["cum_of_total"] < 0.92]
 
 valid_routes = summary.index.values.tolist()
 summary.to_csv("data/valid_routes.csv")
