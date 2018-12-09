@@ -10,39 +10,75 @@ Capstone - DAMCO
 import os
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
 
 os.chdir('/media/shareddata/MIT/Capstone')
 os.getcwd()
 
-# customer = pd.read_csv('data/data2.csv')
+customer_clean = pd.DataFrame({'Carrier': [], 'ATA': [], 'ATD': [], 'ETD': [],
+                              'Original Port Of Loading': [],
+                              'Final Port Of Discharge': [],
+                              'Original Port Of Loading Site': [],
+                              'Final Port Of Discharge Site': []})
 
-# customer = pd.read_csv('data/Capstone Project data/USWA Oct15-Sept18.csv')
-summary = pd.read_csv('data/valid_routes.csv')
-summary = summary.set_index(['Carrier',
-                             'Original Port Of Loading',
-                             'Final Port Of Discharge'])
+column_names = ['PO Line Uploaded', 'POH Client Date', 'POH Upload Date',
+                'Book Date', 'Receipt Date', 'Consolidation Date',
+                'ETD', 'ETA', 'ATD', 'ATA', 'Consignee',
+                'PO Number', 'Origin Service', 'Destination Service', 'Consignee.1',
+                'Carrier', 'VOCC Carrier', 'Carrier SCAC', 'CBL Number',
+                'Booking Number', 'Shipper', 'Supplier', 'Buyer', 'Seller',
+                'Original Port Of Loading', 'Original Port Of Loading Site',
+                'Final Port Of Discharge', 'Final Port Of Discharge Site',
+                'Actual Measurement', 'Earliest Receipt Date', 'Expected Receipt Date',
+                'Latest Receipt Date', 'Actual Receipt Date',
+                'Empty Equipment Dispatch-Actual', 'Gate In Origin-Actual',
+                'Container Loaded On Vessel-Actual', 'Consolidation Date.1',
+                'Container Unload From Vessel-Actual', 'Gate Out Destination-Actual',
+                'Container Empty Return-Actual', 'Equipment Number',
+                'Confirmation Date']
 
-valid_routes = summary.index.values.tolist()
+customers = ['USWA', 'USAD', 'USNI', 'USHO', 'USTA',
+             'USDO', 'USCL']
+# customer_name = 'USHA' and 'USHE', 'USTE' do not work
 
-# clean data
-# get real carrier
-customer["Carrier"] = np.where(customer['VOCC Carrier'].isna,
-        customer["CBL Number"],    #"Carrier SCAC"
-        customer["VOCC Carrier"])
+for customer_name in customers:
+    print("start to load", customer_name, "...") 
+    customer = pd.read_csv('data/Capstone Project data/' + customer_name +'.csv')
+    print("loaded", customer_name, "starting to clean the dataframe")
+    
+    if customer.columns[0] == 'Unnamed: 0':
+        customer = customer.drop(columns='Unnamed: 0')
+        print('droped unnecessary index column')
+    customer.columns = column_names
 
-# get rid of missing data - select right columns
-customer_clean = (customer.loc[customer['ATA'].notna()]
-                          .loc[customer['ATD'].notna()]
-                          .loc[:,['Carrier', 'ATA', 'ATD', 'ETD',
-                                  'Original Port Of Loading',
-                                 'Final Port Of Discharge']])
+    # get real carrier
+    customer["Carrier"] = np.where(customer['VOCC Carrier'].isna,
+            customer["CBL Number"],    #"Carrier SCAC"
+            customer["VOCC Carrier"])
+    
+    # get rid of missing data - select right columns
+    customer = (customer.loc[customer['Final Port Of Discharge Site'] == 'UNITED STATES']
+                        .loc[customer['ATA'].notna()]
+                        .loc[customer['ATD'].notna()]
+                        .loc[customer['ETD'].notna()]
+                        .loc[:,['Carrier', 'ATA', 'ATD', 'ETD',
+                                'Original Port Of Loading',
+                                'Final Port Of Discharge',
+                                'Original Port Of Loading Site',
+                                'Final Port Of Discharge Site']]
+                        .drop_duplicates(subset=['Carrier','ATD',
+                                                 'Original Port Of Loading',
+                                                 'Final Port Of Discharge']))
+    customer['customer'] = customer_name
+    # append to customer_clean
+    print("appending", customer_name, "to customer_clean", "\n") 
+    customer_clean = customer_clean.append(customer)
 
 # get date to right format
 date_columns = ['ATA', 'ATD', 'ETD']
+customer_clean[date_columns] = customer_clean[date_columns].replace('-', '/', regex = True)
 
 for column in date_columns:
-    customer_clean[column] = pd.to_datetime(customer_clean[column])
+    customer_clean[column] = pd.to_datetime(customer_clean[column], format =  '%d/%m/%Y')
     print(['finished converting column', column, 'to date'])
 
 #get y column
@@ -56,39 +92,43 @@ customer_clean['schedule_miss'] = customer_clean['schedule_miss'].dt.days
 #customer_clean['schedule_miss']
 
 
-# day of week / Quarter
-customer_clean['weekday'] = customer_clean['ETD'].dt.weekday_name
-customer_clean = customer_clean.join(pd.get_dummies(customer_clean['weekday']))
-
-customer_clean['quarter'] = customer_clean['ETD'].dt.quarter
-customer_clean = customer_clean.join(pd.get_dummies(customer_clean['quarter']))
-
-# filter valid routes
-customer_clean = customer_clean.set_index(['Carrier',
-                                           'Original Port Of Loading',
-                                           'Final Port Of Discharge'])
-
-customer_clean = customer_clean.loc[customer_clean.index.isin(valid_routes)]
-
-# get route statistics
-customer_clean = customer_clean.join(summary[['median', 'std']])
-
-customer_clean.to_csv("data/customer_clean")
-
 ###########################################################
 # SUMMARY Statistics - valid routes
 #############################################################
 
+# get summary exact
+summary = customer_clean.groupby(['customer', 'Carrier',
+                                  'Original Port Of Loading','Final Port Of Discharge']
+        )['y'].agg([np.mean, np.std, np.median, np.count_nonzero])
+
+summary = summary[summary['count_nonzero'] > 50]
+summary.to_csv("data/summary_route_customer.csv")
+summary = summary.reset_index()
+# get route statistics
+customer_clean = customer_clean.merge(summary,
+                                      on = ['customer', 'Carrier',
+                                            'Original Port Of Loading',
+                                            'Final Port Of Discharge'],
+                                      how = 'left')
+
+# get summary statistic w/o customer
 summary = customer_clean.groupby(['Carrier',
               'Original Port Of Loading',
               'Final Port Of Discharge'])['y'].agg([np.mean, np.std, np.median, np.count_nonzero])
 
-summary = summary.sort_values("count_nonzero", ascending=0)
-n_obs = sum(summary["count_nonzero"])
-summary["percent_of_total"] = summary["count_nonzero"] / n_obs
-summary["cum_of_total"] = summary["percent_of_total"].cumsum()
-summary = summary.loc[summary["cum_of_total"] < 0.92]
+summary = summary[summary['count_nonzero'] > 50]
+summary.to_csv("data/summary_route_carrier.csv")
+summary = summary.reset_index()
 
-valid_routes = summary.index.values.tolist()
-summary.to_csv("data/valid_routes.csv")
+customer = (customer_clean.loc[np.isnan(customer_clean['mean'])]
+                          .drop(['mean', 'median', 'count_nonzero', 'std'], axis = 1)
+                          .merge(summary,
+                                 on = ['Carrier','Original Port Of Loading',
+                                       'Final Port Of Discharge'],
+                                 how = 'left'))
 
+customer_clean = customer_clean.append(customer)
+customer_clean = customer_clean.loc[customer_clean['mean'].notna()]
+
+customer_clean = customer_clean.drop(['mean', 'count_nonzero'], axis=1)
+customer_clean.to_csv("data/customer_clean_route")
