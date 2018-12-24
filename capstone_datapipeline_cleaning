@@ -13,15 +13,22 @@ Partner Company: DAMCO/Maersk
 import os
 import numpy as np
 import pandas as pd
+import datetime
 
 os.chdir('/media/shareddata/MIT/Capstone')
 os.getcwd()
 
-customer_clean = pd.DataFrame({'Carrier': [], 'ATA': [], 'ATD': [], 'ETD': [],
-                              'Original Port Of Loading': [],
-                              'Final Port Of Discharge': [],
-                              'Original Port Of Loading Site': [],
-                              'Final Port Of Discharge Site': []})
+customer_clean = pd.DataFrame({'Shipper':[], 'Carrier':[],
+                                'Original Port Of Loading':[],
+                                'Original Port Of Loading Site':[],
+                                'Final Port Of Discharge':[],
+                                'Final Port Of Discharge Site':[],
+                                'Origin Service':[], 
+                                'Book Date':[], 'Expected Receipt Date':[], 
+                                'Gate In Origin-Actual':[], 'Consolidation Date':[],
+                                'ETD':[], 'ATD':[],'ETA':[], 'ATA':[],
+                                'Container Unload From Vessel-Actual':[],
+                                'Equipment Number':[]})
 
 column_names = ['PO Line Uploaded', 'POH Client Date', 'POH Upload Date',
                 'Book Date', 'Receipt Date', 'Consolidation Date',
@@ -42,7 +49,7 @@ column_names = ['PO Line Uploaded', 'POH Client Date', 'POH Upload Date',
 customers = ['USWA', 'USAD', 'USNI', 'USHO', 'USTA',
              'USDO', 'USCL', 'USHA', 'USHE']
 # customer_name = 'USTE' does not work
-customer = pd.read_csv('data/Capstone Project data/USHE.csv', encoding= 'latin1')
+#customer = pd.read_csv('data/Capstone Project data/USHE.csv', encoding= 'latin1')
 #customer[customer['Expected Receipt Date'].notna()]
 
 for customer_name in customers:
@@ -63,7 +70,7 @@ for customer_name in customers:
     # get rid of missing data - select right columns
     customer = (customer.loc[customer['Final Port Of Discharge Site'] == 'UNITED STATES']
                         .loc[customer['ETD'].notna()]
-                        .loc[customer['Expected Receipt Date'].notna()]
+                        .loc[customer['Gate In Origin-Actual'].notna()]
                         .loc[customer['Container Unload From Vessel-Actual'].notna()]
                         .loc[:,['Shipper', 'Carrier',
                                 'Original Port Of Loading',
@@ -78,12 +85,16 @@ for customer_name in customers:
                                 'Equipment Number']])
     
     customer['customer'] = customer_name
+    customer['Final Port Of Discharge'] = customer['Final Port Of Discharge'].str.title()
     # append to customer_clean
     print("appending", customer_name, "to customer_clean", "\n") 
     customer_clean = customer_clean.append(customer)
 
 # get date to right format
-date_columns = ['Gate In Origin-Actual','Container Unload From Vessel-Actual']
+date_columns = ['Gate In Origin-Actual',
+                'Container Unload From Vessel-Actual',
+                'ETD', 'Expected Receipt Date']
+
 customer_clean[date_columns] = customer_clean[date_columns].replace('-', '/', regex = True)
 
 for column in date_columns:
@@ -93,6 +104,69 @@ for column in date_columns:
 # get y column
 customer_clean['y'] = customer_clean['Container Unload From Vessel-Actual']-customer_clean['Gate In Origin-Actual']
 customer_clean['y'] = customer_clean['y'].dt.days
-    
 
-    
+# get weekday of planned departure
+customer_clean['weekday'] = customer_clean['ETD'].dt.weekday
+
+# load port of origin statistics
+port_origin = pd.read_csv('data/statistics/summary_port_of_origin.csv',
+                          sep = ',', encoding= 'latin1')
+port_origin = port_origin[['Shipper','Original Port Of Loading','std','median']]
+port_origin.columns = ['Shipper','Original Port Of Loading','std_po','median_po']
+
+# load chinese new year dates
+chinese_holidays = pd.read_csv('data/statistics/chinese_holidays_complete.csv',
+                               sep = ',', encoding= 'latin1')
+chinese_holidays['date'] = pd.to_datetime(chinese_holidays['date'])
+
+# load route carrier statistics
+route = pd.read_csv('data/statistics/summary_route_carrier.csv',
+                    sep = ',', encoding = 'latin1')
+route = route[['Carrier', 'Original Port Of Loading', 'Final Port Of Discharge',
+               'std', 'median']]
+route.columns = ['Carrier', 'Original Port Of Loading', 'Final Port Of Discharge',
+                 'std_route', 'median_route']
+
+# load carrier schedule statistics
+route_schedule = pd.read_csv('data/statistics/summary_route_carrier_schedule.csv',
+                             sep = ',', encoding='latin1')
+route_schedule = route_schedule[['Carrier', 'Original Port Of Loading',
+                                 'Final Port Of Discharge', 'weekday', 'mean_schedule']]
+
+# load port of destination carrier statistics
+port_dest = pd.read_csv('data/statistics/summary_port_of_destination.csv',
+                        sep = ',', encoding='latin1')
+port_dest = port_dest[['customer', 'Carrier', 'Final Port Of Discharge',
+                       'std_port_carrier', 'median']]
+port_dest.columns = ['customer', 'Carrier', 'Final Port Of Discharge',
+                     'std_pd', 'median_pd',]
+
+# load us port capacity statistics
+port_cap = pd.read_csv('data/statistics/summary_ports_us.csv',
+                       sep = ',', encoding='latin1')
+port_cap[['Arrival Date', 'Number of Containers', 'cap', 'Port Name', 'City', 'State', 'coast']]
+
+
+customer_clean.columns
+
+view = customer_clean.head(20)
+
+
+# merge dfs
+customer_clean = (customer_clean.merge(port_origin,
+                                      on = ['Shipper','Original Port Of Loading'],
+                                      how = 'inner')
+                                .merge(port_dest, 
+                                       on = ['customer', 'Carrier', 'Final Port Of Discharge'],
+                                       how = 'inner')
+                                .merge(route,
+                                       on = ['Carrier', 'Original Port Of Loading', 'Final Port Of Discharge'],
+                                       how = 'left')
+                                .merge(route_schedule,
+                                       on = ['Carrier', 'Original Port Of Loading',
+                                             'Final Port Of Discharge', 'weekday'],
+                                       how = 'left',))
+
+customer_clean['holiday'] = np.where(np.isin(customer_clean['ETD'], chinese_holidays['date']), 1, 0)
+
+
