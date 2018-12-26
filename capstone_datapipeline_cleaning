@@ -93,7 +93,8 @@ for customer_name in customers:
 # get date to right format
 date_columns = ['Gate In Origin-Actual',
                 'Container Unload From Vessel-Actual',
-                'ETD', 'Expected Receipt Date']
+                'ETD', 'Expected Receipt Date',
+                'ATA']
 
 customer_clean[date_columns] = customer_clean[date_columns].replace('-', '/', regex = True)
 
@@ -107,6 +108,17 @@ customer_clean['y'] = customer_clean['y'].dt.days
 
 # get weekday of planned departure
 customer_clean['weekday'] = customer_clean['ETD'].dt.weekday
+
+# get day of year of arrival date
+customer_clean['doy'] = customer_clean['ATA'].dt.dayofyear
+
+# get consignment columns
+customer_clean['consignment'] = np.where(customer_clean['Origin Service'] == 'CFS', 1, 0)
+
+
+######################
+## load statistics  ##
+######################
 
 # load port of origin statistics
 port_origin = pd.read_csv('data/statistics/summary_port_of_origin.csv',
@@ -144,15 +156,22 @@ port_dest.columns = ['customer', 'Carrier', 'Final Port Of Discharge',
 # load us port capacity statistics
 port_cap = pd.read_csv('data/statistics/summary_ports_us.csv',
                        sep = ',', encoding='latin1')
-port_cap[['Arrival Date', 'Number of Containers', 'cap', 'Port Name', 'City', 'State', 'coast']]
+port_cap = port_cap[['City', 'year', 'Arrival Date', 'cap']]
+port_cap['Arrival Date'] = pd.to_datetime(port_cap['Arrival Date'], format = '%d.%m.%Y')
 
+port_cap.index = port_cap['Arrival Date'].dt.dayofyear
 
-customer_clean.columns
+port_cap = (port_cap.groupby(['City', 'year'])['cap']
+                    .rolling(3, center = True, min_periods = 1).mean())
+port_cap = port_cap.reset_index()
+port_cap.columns = ['City', 'year', 'doy', 'cap']
+port_cap = port_cap.groupby(['City', 'doy'])['cap'].mean()
+port_cap = port_cap.reset_index()
 
-view = customer_clean.head(20)
+###############
+## merge dfs ##
+###############
 
-
-# merge dfs
 customer_clean = (customer_clean.merge(port_origin,
                                       on = ['Shipper','Original Port Of Loading'],
                                       how = 'inner')
@@ -165,8 +184,13 @@ customer_clean = (customer_clean.merge(port_origin,
                                 .merge(route_schedule,
                                        on = ['Carrier', 'Original Port Of Loading',
                                              'Final Port Of Discharge', 'weekday'],
-                                       how = 'left',))
+                                       how = 'left',)
+                                .merge(port_cap, 
+                                       left_on = ['Final Port Of Discharge', 'doy'],
+                                       right_on = ['City', 'doy'],
+                                       how = 'left'))
 
 customer_clean['holiday'] = np.where(np.isin(customer_clean['ETD'], chinese_holidays['date']), 1, 0)
 
+view = customer_clean.head(50)
 
