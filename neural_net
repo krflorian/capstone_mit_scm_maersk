@@ -12,11 +12,18 @@ import pandas as pd
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.utils.vis_utils import plot_model
+from sklearn.model_selection import GridSearchCV
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.layers import Dropout
+from keras.wrappers.scikit_learn import KerasRegressor
+from keras.constraints import maxnorm
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn import metrics
 import matplotlib.pyplot as plt
 import os
+
 
 os.chdir('/media/shareddata/MIT/Capstone')
 os.getcwd()
@@ -25,29 +32,25 @@ pd.set_option('display.expand_frame_repr', False)
 seed = 1992
 np.random.seed(seed)
 
-customer_clean = pd.read_csv('data/customer_clean_route')
+exec(open('scripts/capstone_datapipeline_cleaning').read())
+customer_clean = customer_clean[customer_clean['y'] > 0]
 
-###############
-# get dates  ##
-###############
+# set up training and test set
+X = customer_clean[['consignment', 'std_po', 'median_po', 'holiday',
+                    'std_pd', 'median_pd', 'cap',
+                    'mean_schedule', 'std_route', 1, 2, 3,
+                    'USAD', 'USDO', 'USHA', 'USHE', 'USHO', 'USTA', 'y']]
 
-date_columns = ['ATA', 'ATD', 'ETD']
-#customer_clean[date_columns] = customer_clean[date_columns].replace('-', '/', regex = True)
+X = X.dropna()
 
-for column in date_columns:
-    customer_clean[column] = pd.to_datetime(customer_clean[column], format =  '%Y/%m/%d')
-    print(['finished converting column', column, 'to date'])
+y = X['y']
 
-
-# set up model
-
-X = customer_clean[['schedule_miss', 'mean_schedule', 'std', '1','2','3']]
-
-y = customer_clean['y']
+X = X.drop('y', axis = 1)
 
 # standardize
 
-num_columns = ['schedule_miss', 'mean_schedule', 'std']
+num_columns = ['std_po', 'median_po', 'std_pd', 'median_pd',
+               'cap','mean_schedule', 'std_route',]
 
 scaler = StandardScaler(copy=True, with_mean=True, with_std=True)
 scaler.fit(X[num_columns])
@@ -62,7 +65,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 model = Sequential()
 # 1st layer
-model.add(Dense(6, input_dim=6,
+model.add(Dense(len(X.columns), input_dim=len(X.columns),
                 kernel_initializer='normal',
                 activation='relu'))
 model.add(Dense(6,
@@ -73,16 +76,14 @@ model.add(Dense(1, kernel_initializer='normal'))
 # compile model
 model.compile(loss='mean_squared_error', optimizer='adam')
 
-
 ###############
 # plot loss  ##
 ###############
 
 history = model.fit(X_train, y_train, validation_split = 0.3,
-                    epochs = 2000, batch_size = 500)
+                    epochs = 100, batch_size = 5000)
 
 print(history.history.keys())
-
 plt.plot(history.history['loss'])
 plt.plot(history.history['val_loss'])
 plt.title('model loss')
@@ -91,16 +92,18 @@ plt.xlabel('epoch')
 plt.legend(['train', 'test'], loc='upper left')
 plt.show()
 
+
+# loss = 11
 # train best model
 
 model.fit(X_train, y_train, validation_split = 0.3,
-                    epochs = 900, batch_size = 500)
+                    epochs = 100, batch_size = 5000)
 
 print(model.summary())
 
 plot_model(model, to_file='Analytics/nn_model_plot.png',
            show_shapes=True, show_layer_names=True)
-
+model.predict
 ##############
 ## test nn  ##
 ##############
@@ -123,4 +126,61 @@ def print_metrics(y_hat, y_test):
     return output
 
 print_metrics(test_data["y_hat"], test_data["y_test"])
+
+##########################
+# hyperparameter tuning ##
+##########################
+
+def create_model(neurons=1, neurons_2=1):
+    model = Sequential()
+    # 1st layer
+    model.add(Dense(neurons, input_dim=len(X.columns),
+                    kernel_initializer='normal',
+                    activation='relu'))
+    model.add(Dropout(0.2))
+    # 2nd layer
+    model.add(Dense(neurons_2,
+                    kernel_initializer='normal',
+                    activation='relu'))
+    model.add(Dropout(0.2))
+    # output layer
+    model.add(Dense(1, kernel_initializer='normal'))
+    # compile model
+    model.compile(loss='mse', optimizer='adam', metrics = ['mape', 'mae'])
+    return model
+
+
+# validation split !!
+model = KerasRegressor(build_fn = create_model,
+                       epochs=100, batch_size=500,
+                       verbose=2, validation_split = 0.3)
+
+# define the grid search parameters
+neurons = [30]
+neurons_2 = [20, 25, 30]
+
+
+param_grid = dict(neurons=neurons, neurons_2=neurons_2)
+
+# grid search
+grid = GridSearchCV(estimator=model, param_grid=param_grid,
+                    n_jobs=1, verbose=2)
+
+grid_result = grid.fit(X_train, y_train)
+
+
+
+print("Best: %f using %s" % (grid_result.best_score_, grid_result.best_params_))
+means = grid_result.cv_results_['mean_test_score']
+stds = grid_result.cv_results_['std_test_score']
+params = grid_result.cv_results_['params']
+for mean, stdev, param in zip(means, stds, params):
+    print("%f (%f) with: %r" % (mean, stdev, param))
+
+y_hat = grid_result.predict(X_test)
+
+print_metrics(y_hat, y_test)
+grid_result.best_score_
+grid_result.best_params_
+grid_result.cv_results_['mean_test_score']
 

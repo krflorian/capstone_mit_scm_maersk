@@ -48,7 +48,7 @@ column_names = ['PO Line Uploaded', 'POH Client Date', 'POH Upload Date',
 
 customers = ['USWA', 'USAD', 'USNI', 'USHO', 'USTA',
              'USDO', 'USCL', 'USHA', 'USHE']
-# customer_name = 'USTE' does not work
+# custohttp://board.canna.to/viewtopic.php?f=11&t=11mer_name = 'USTE' does not work
 #customer = pd.read_csv('data/Capstone Project data/USHE.csv', encoding= 'latin1')
 #customer[customer['Expected Receipt Date'].notna()]
 
@@ -85,7 +85,7 @@ for customer_name in customers:
                                 'Equipment Number']])
     
     customer['customer'] = customer_name
-    customer['Final Port Of Discharge'] = customer['Final Port Of Discharge'].str.title()
+    # customer['Final Port Of Discharge'] = customer['Final Port Of Discharge'].str.title()
     # append to customer_clean
     print("appending", customer_name, "to customer_clean", "\n") 
     customer_clean = customer_clean.append(customer)
@@ -152,6 +152,7 @@ port_dest = port_dest[['customer', 'Carrier', 'Final Port Of Discharge',
                        'std_port_carrier', 'median']]
 port_dest.columns = ['customer', 'Carrier', 'Final Port Of Discharge',
                      'std_pd', 'median_pd',]
+port_dest['Final Port Of Discharge'] = port_dest['Final Port Of Discharge'].str.upper()
 
 # load us port capacity statistics
 port_cap = pd.read_csv('data/statistics/summary_ports_us.csv',
@@ -167,6 +168,7 @@ port_cap = port_cap.reset_index()
 port_cap.columns = ['City', 'year', 'doy', 'cap']
 port_cap = port_cap.groupby(['City', 'doy'])['cap'].mean()
 port_cap = port_cap.reset_index()
+port_cap['City'] = port_cap['City'].str.upper()
 
 ###############
 ## merge dfs ##
@@ -194,3 +196,13 @@ customer_clean['holiday'] = np.where(np.isin(customer_clean['ETD'], chinese_holi
 
 view = customer_clean.head(50)
 
+customer_clean['mean_schedule'] = np.where(np.isnan(customer_clean['mean_schedule']),
+                                           customer_clean['median_route'],
+                                           customer_clean['mean_schedule'])
+
+customer_clean['quarter'] = customer_clean['ETD'].dt.quarter
+customer_clean = customer_clean.join(pd.get_dummies(customer_clean['quarter']))
+customer_clean = customer_clean.drop(['quarter', 4], axis = 1)
+
+customer_clean = customer_clean.join(pd.get_dummies(customer_clean['customer']))
+customer_clean = customer_clean.drop('USWA', axis=1)
