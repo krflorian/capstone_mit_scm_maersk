@@ -11,13 +11,10 @@ import pandas as pd
 
 from keras.models import Sequential
 from keras.layers import Dense
-from keras.utils.vis_utils import plot_model
 from sklearn.model_selection import GridSearchCV
-from keras.models import Sequential
-from keras.layers import Dense
 from keras.layers import Dropout
 from keras.wrappers.scikit_learn import KerasRegressor
-from keras.constraints import maxnorm
+from keras.models import model_from_json
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn import metrics
@@ -33,10 +30,9 @@ seed = 1992
 np.random.seed(seed)
 
 exec(open('scripts/capstone_datapipeline_cleaning').read())
-customer_clean = customer_clean[customer_clean['y'] > 0]
 
 # set up training and test set
-X = customer_clean[['consignment', 'std_po', 'median_po', 'holiday',
+X = customer_clean[['consolidation', 'std_po', 'median_po', 'holiday',
                     'std_pd', 'median_pd', 'cap',
                     'mean_schedule', 'std_route', 1, 2, 3,
                     'USAD', 'USDO', 'USHA', 'USHE', 'USHO', 'USTA', 'y']]
@@ -57,7 +53,7 @@ scaler.fit(X[num_columns])
 X.loc[:,num_columns] = scaler.transform(X[num_columns])
 
 X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.30, random_state=1992)
+        X, y, test_size=0.3, random_state=1992)
 
 #######################
 # deep neural network #
@@ -65,23 +61,26 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 model = Sequential()
 # 1st layer
-model.add(Dense(len(X.columns), input_dim=len(X.columns),
+model.add(Dense(20, input_dim=len(X.columns),
                 kernel_initializer='normal',
                 activation='relu'))
-model.add(Dense(6,
+model.add(Dropout(0.2))
+# 2nd layer
+model.add(Dense(20,
                 kernel_initializer='normal',
                 activation='relu'))
+model.add(Dropout(0.2))
 # output layer
 model.add(Dense(1, kernel_initializer='normal'))
 # compile model
-model.compile(loss='mean_squared_error', optimizer='adam')
+model.compile(loss='mse', optimizer='adam', metrics = ['mape', 'mae'])
 
 ###############
 # plot loss  ##
 ###############
 
 history = model.fit(X_train, y_train, validation_split = 0.3,
-                    epochs = 100, batch_size = 5000)
+                    epochs = 200, batch_size = 2000)
 
 print(history.history.keys())
 plt.plot(history.history['loss'])
@@ -96,17 +95,41 @@ plt.show()
 # loss = 11
 # train best model
 
-model.fit(X_train, y_train, validation_split = 0.3,
-                    epochs = 100, batch_size = 5000)
+model.fit(X, y, validation_split = 0.3,
+          epochs = 1000, batch_size = 5000)
 
 print(model.summary())
 
-plot_model(model, to_file='Analytics/nn_model_plot.png',
-           show_shapes=True, show_layer_names=True)
-model.predict
+
+################
+#  save model ##
+################
+
+# serialize model to JSON
+model_json = model.to_json()
+with open("data/models/model_1_1.json", "w") as json_file:
+    json_file.write(model_json)
+# serialize weights to HDF5
+model.save_weights("data/models/model_1_1.h5")
+print("Saved model to disk")
+ 
+# later...
+ 
+# load json and create model
+json_file = open('data/models/model_1_1.json', 'r')
+loaded_model_json = json_file.read()
+json_file.close()
+model = model_from_json(loaded_model_json)
+# load weights into new model
+model.load_weights("data/models/model_1_1.h5")
+print("Loaded model from disk")
+
+
+
 ##############
 ## test nn  ##
 ##############
+
 
 y_hat = model.predict(X_test)
 
@@ -125,13 +148,23 @@ def print_metrics(y_hat, y_test):
                    )
     return output
 
-print_metrics(test_data["y_hat"], test_data["y_test"])
+print_metrics(test_data['y_hat'], test_data['y_test'])
 
+##################
+## save results ##
+##################
+
+X_test['y_hat'] = y_hat
+result = customer_clean.join(X_test['y_hat'], on=None)
+result = result.dropna(subset=['y_hat'])
+result.to_csv('data/results/result_randomforest.csv')
+customer_clean.to_csv('data/results/customer_data.csv')
+#view = result.head(50)
 ##########################
 # hyperparameter tuning ##
 ##########################
 
-def create_model(neurons=1, neurons_2=1):
+def create_model(neurons=1, neurons_2=2):
     model = Sequential()
     # 1st layer
     model.add(Dense(neurons, input_dim=len(X.columns),
@@ -143,6 +176,11 @@ def create_model(neurons=1, neurons_2=1):
                     kernel_initializer='normal',
                     activation='relu'))
     model.add(Dropout(0.2))
+#    # 3rd layer
+#    model.add(Dense(neurons_3,
+#                    kernel_initializer='normal',
+#                    activation='relu'))
+#    model.add(Dropout(0.2))
     # output layer
     model.add(Dense(1, kernel_initializer='normal'))
     # compile model
@@ -152,21 +190,22 @@ def create_model(neurons=1, neurons_2=1):
 
 # validation split !!
 model = KerasRegressor(build_fn = create_model,
-                       epochs=100, batch_size=500,
+                       epochs=1000, batch_size=2000,
                        verbose=2, validation_split = 0.3)
 
 # define the grid search parameters
-neurons = [30]
-neurons_2 = [20, 25, 30]
+neurons = [18, 30]
+neurons_2 = [18, 30]
+neurons_3 = [5, 10, 20, 30]
 
 
-param_grid = dict(neurons=neurons, neurons_2=neurons_2)
+param_grid = dict(neurons=neurons, neurons_2 = neurons_2)
 
 # grid search
 grid = GridSearchCV(estimator=model, param_grid=param_grid,
                     n_jobs=1, verbose=2)
 
-grid_result = grid.fit(X_train, y_train)
+grid_result = grid.fit(X, y)
 
 
 
@@ -183,4 +222,91 @@ print_metrics(y_hat, y_test)
 grid_result.best_score_
 grid_result.best_params_
 grid_result.cv_results_['mean_test_score']
+
+
+
+
+
+##############################
+## test with random forest  ##
+##############################
+from sklearn.ensemble import RandomForestRegressor 
+
+regr = RandomForestRegressor(n_estimators = 10,
+                             criterion = 'mse',
+                             random_state = 1992,
+                             max_depth = None,
+                             max_leaf_nodes = None,
+                             min_samples_split = 2,
+                             min_samples_leaf = 10,
+                             n_jobs = -1,
+                             verbose = 100
+                             )
+
+regr.fit(X_train, y_train)
+
+y_hat = regr.predict(X_test) #.drop('y_hat', axis=1)
+
+print_metrics(y_hat, y_test)
+
+feature_importance = (pd.DataFrame(X_train.columns,
+                                  regr.feature_importances_)
+                        .reset_index()
+                        .sort_values('index', ascending=0))
+print(feature_importance)
+
+filename = 'data/models/randomforest_1_1.joblib'
+
+from sklearn.externals import joblib
+joblib.dump(regr, filename) 
+regr = joblib.load('data/models/randomforest_1_1.joblib')
+
+
+#############################
+## test mean carrier route ##
+#############################
+
+customer_clean.columns
+customer_clean = customer_clean.merge(
+                    (customer_clean.groupby(['Carrier',
+                                             'Original Port Of Loading',
+                                             'Final Port Of Discharge'])['y']
+                                    .mean()
+                                    .reset_index()),
+                    on=['Carrier',
+                        'Original Port Of Loading',
+                        'Final Port Of Discharge'],
+                    how='left')
+
+customer_clean.columns = ['ATA', 'ATD', 'Book Date', 'Carrier',
+                          'Consolidation Date', 'Container Unload From Vessel-Actual',
+                          'ETA', 'ETD', 'Equipment Number', 'Expected Receipt Date',
+                          'Final Port Of Discharge', 'Final Port Of Discharge Site',
+                          'Gate In Origin-Actual', 'Origin Service', 
+                          'Original Port Of Loading', 'Original Port Of Loading Site',
+                          'Shipper','customer', 'y', 'weekday', 'doy',
+                          'consolidation','std_po','median_po','std_pd',
+                          'median_pd','std_route','median_route','mean_schedule',
+                          'City','cap','holiday',1,2,3,'USAD','USDO','USHA',
+                          'USHE','USHO','USTA','y_mean']
+
+
+print_metrics(customer_clean['y_mean'], customer_clean['y'])
+
+
+####################################
+##  multiple linear regression
+####################################
+
+
+from sklearn.linear_model import LinearRegression
+
+lin_reg = LinearRegression(n_jobs = -1)
+
+lin_reg.fit(X_train, y_train)
+
+y_hat = lin_reg.predict(X_test)
+
+print_metrics(y_hat, y_test)
+
 

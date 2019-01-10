@@ -13,7 +13,6 @@ Partner Company: DAMCO/Maersk
 import os
 import numpy as np
 import pandas as pd
-import datetime
 
 os.chdir('/media/shareddata/MIT/Capstone')
 os.getcwd()
@@ -94,7 +93,7 @@ for customer_name in customers:
 date_columns = ['Gate In Origin-Actual',
                 'Container Unload From Vessel-Actual',
                 'ETD', 'Expected Receipt Date',
-                'ATA']
+                'ATA', 'ATD', 'ATA', 'ETA']
 
 customer_clean[date_columns] = customer_clean[date_columns].replace('-', '/', regex = True)
 
@@ -112,8 +111,8 @@ customer_clean['weekday'] = customer_clean['ETD'].dt.weekday
 # get day of year of arrival date
 customer_clean['doy'] = customer_clean['ATA'].dt.dayofyear
 
-# get consignment columns
-customer_clean['consignment'] = np.where(customer_clean['Origin Service'] == 'CFS', 1, 0)
+# get consolidation columns
+customer_clean['consolidation'] = np.where(customer_clean['Origin Service'] == 'CFS', 1, 0)
 
 
 ######################
@@ -206,3 +205,32 @@ customer_clean = customer_clean.drop(['quarter', 4], axis = 1)
 
 customer_clean = customer_clean.join(pd.get_dummies(customer_clean['customer']))
 customer_clean = customer_clean.drop('USWA', axis=1)
+
+# drop duplicates
+
+#customer_clean = customer_clean.drop_duplicates(subset=['Carrier', 'Final Port Of Discharge', 
+#                                                        'Original Port Of Loading',
+#                                                        'Container Unload From Vessel-Actual',
+#                                                        'Gate In Origin-Actual', 'y'])
+
+customer_clean = customer_clean.drop_duplicates(subset=['customer',
+                                                        'Carrier', 'Shipper', 'Final Port Of Discharge', 
+                                                        'Original Port Of Loading',
+                                                        'Container Unload From Vessel-Actual',
+                                                        'Gate In Origin-Actual', 'y'])
+                                
+customer_clean = customer_clean[customer_clean['y'] > 0]
+customer_clean = customer_clean[customer_clean['y'] < 50]
+
+
+
+### performance function
+
+def print_metrics(y_hat, y_test):
+    output = print('MAE: ', round(np.mean(abs(y_hat-y_test)), 2), "\n",
+                   'MAPE: ', round(np.mean(abs(y_hat-y_test)/y_test), 4), "\n",
+                   'RMSE: ', round(np.sqrt(np.mean((y_test - y_hat)**2)), 2), "\n"
+                   ' R2: ', round(metrics.r2_score(y_test, y_hat),2)
+                   )
+    return output
+
