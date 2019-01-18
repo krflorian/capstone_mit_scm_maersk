@@ -14,7 +14,7 @@ import os
 import numpy as np
 import pandas as pd
 
-os.chdir('/media/shareddata/MIT/Capstone')
+os.chdir('E:\MIT\Capstone')
 os.getcwd()
 
 customer_clean = pd.DataFrame({'Shipper':[], 'Carrier':[],
