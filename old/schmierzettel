@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Oct 30 19:13:43 2018
+
+@author: drx
+"""
+
+import os
+import numpy as np
+import pandas as pd
+from scipy import stats
+import matplotlib.pyplot as plt 
+from scipy import stats
+
+
+os.chdir('/media/shareddata/MIT/Capstone')
+os.getcwd()
+
+
+customer.columns = ['PO Line Uploaded', 'POH Client Date', 'POH Upload Date', 'Book Date',
+       'Receipt Date', 'Consolidation Date', 'ETD', 'ETA',
+       'ATD', 'ATA', 'Consignee',
+       'PO Number', 'Origin Service', 'Destination Service', 'Consignee.1',
+       'Carrier', 'VOCC Carrier', 'Carrier SCAC', 'CBL Number',
+       'Booking Number', 'Shipper', 'Supplier', 'Buyer', 'Seller',
+       'Original Port Of Loading', 'Original Port Of Loading Site',
+       'Final Port Of Discharge', 'Final Port Of Discharge Site',
+       'Actual Measurement', 'Earliest Receipt Date', 'Expected Receipt Date',
+       'Latest Receipt Date', 'Actual Receipt Date',
+       'Empty Equipment Dispatch-Actual', 'Gate In Origin-Actual',
+       'Container Loaded On Vessel-Actual', 'Consolidation Date.1',
+       'Container Unload From Vessel-Actual', 'Gate Out Destination-Actual',
+       'Container Empty Return-Actual', 'Equipment Number',
+       'Confirmation Date']
+
+customer.to_csv('data/Capstone Project data/USWA Oct15-Sept18_new.csv')
+
+view = customer_clean
+
+
+view = customer_clean[(customer_clean['Actual Receipt Date'] > -10) & (customer_clean['Actual Receipt Date'] < 10)]
+
+plt.hist(view['Actual Receipt Date'], bins = 20)
+plt.show()
+
+
+view = view[view["Consolidation Date"] < 0]
+
+
+
+########################
+
+customer['Equipment Number'].unique()
+
+view = customer[customer['Equipment Number'] == 'CXDU2196151']
+
+
+
+container_placement = customer_clean.groupby(['Carrier', 'Final Port Of Discharge', 'ATA'])['y'].agg([np.mean, np.std])
+
+
+container_placement2 = (customer_clean.loc[customer_clean['Carrier'] == 'AMAW']
+                                      .loc[customer_clean['Final Port Of Discharge'] == 'Long Beach']
+                                      .loc[customer_clean['ATA'] == '2017-10-04'])
+
+customer_clean.loc[customer_clean['ATA'] == '2017-10-04']
+
+
+date_columns = ['Container Loaded On Vessel-Actual', 'ATD',
+                'Container Unload From Vessel-Actual', 'ATA', 'ETA']
+
+customer[date_columns] = customer[date_columns].replace('-', '/', regex = True)
+
+for column in date_columns:
+    customer[column] = pd.to_datetime(customer[column], format =  '%d/%m/%Y')
+    print(['finished converting column', column, 'to date'])
+
+
+view = (customer.loc[customer['Carrier'] == 'AMAW']
+                 .loc[customer['Final Port Of Discharge'] == 'LONG BEACH']
+                 .loc[customer['ATA'] == '2017-10-04'])
+view = view.loc[:,['Carrier', 'Final Port Of Discharge', 'Container Loaded On Vessel-Actual', 'ATD', 'ATA', 'Container Unload From Vessel-Actual']]
+
+
+
+#########################
+
+
+customer.loc[customer['Carrier'] == 'AMAW']
+customer.loc[customer['Final Port Of Discharge'] == 'Long Beach']
+customer['Final Port Of Discharge'].unique()
+
+# get milestone order
+dates = customer_clean[date_columns]
+milestone = dates[15:17].transpose().reset_index().copy()
+milestone.columns = ['names', 'row1', 'row2']
+
+milestone = milestone.sort_values(by=['row1'])
+
+milestone
+#write excel
+writer = pd.ExcelWriter('milestones2.xlsx')
+milestone.to_excel(writer, 'sheet1')
+writer.save()
+
+
+milestone
+
+###################################################################
+
+
+X = customer_clean[['consolidation', 'std_po', 'median_po', 'holiday',
+                    'std_pd', 'median_pd', 'cap',
+                    'mean_schedule', 'std_route', 1, 2, 3,
+                    'USAD', 'USDO', 'USHA', 'USHE', 'USHO', 'USTA', 'y']]
+
+X = X.dropna()
+
+y = X['y']
+
+X = X.drop('y', axis = 1)
+
+
+customer_new = customer_clean['y'].join(pd.get_dummies(customer_clean['Carrier']))
+
+
+customer_clean['y'].join(pd.get_dummies(customer_clean['Carrier']))
+
+
+customer_new = (customer_clean[['y', 'holiday', 'consolidation', 'cap', 1, 2, 3]].join(pd.get_dummies(customer_clean['Carrier']))
+                                                                .join(pd.get_dummies(customer_clean['Original Port Of Loading']))
+                                                                .join(pd.get_dummies(customer_clean['Final Port Of Discharge'])))
+customer_new['po_miss'] = np.where((customer_clean['ETD']-customer_clean['ATD']).dt.days < 0, 0, (customer_clean['ETD']-customer_clean['ATD']).dt.days)
+customer_new['pd_miss'] = np.where((customer_clean['ETA']-customer_clean['ATA']).dt.days < 0, 0,(customer_clean['ETA']-customer_clean['ATA']).dt.days) 
+customer_new = customer_new.dropna()
+
+X = customer_new[['holiday','consolidation','cap',1,2,3,
+                  'AMAW','APLU','BANQ','CHNJ','CMDU','COSU',
+                  'HDMU','HJSC','HLCU','MAEU','MEDU','MOLU',
+                  'MSCU','NYKS','ONEY','OOLU','YMLU','ZIMU',
+                  'CHIWAN','HAIPHONG','HO CHI MINH CITY (SAIGON)',
+                  'NINGBO','QINGDAO','SHANGHAI','SHEKOU','VUNG TAU',
+                  'CHARLESTON','HOUSTON','LONG BEACH','LOS ANGELES',
+                  'NEW YORK','NEWARK','NORFOLK','SAN PEDRO','SAVANNAH',
+                  'pd_miss', 'po_miss']]
+
+y = customer_new['y']
+
+X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.3, random_state=1992)
+
+model.fit(X, y, validation_split = 0.3,
+          epochs = 1000, batch_size = 10000)
+
+###############################################################
+
+
+y_hat = model.predict(X_test)
+
+test_data = pd.DataFrame(data = {'y_hat': np.NaN,
+                                 'y_test': y_test})
+test_data['y_hat'] = y_hat
+
+
+def print_metrics(y_hat, y_test):
+    output = print('ME: ', round(np.mean(y_test-y_hat), 2), "\n",
+                   'MAE: ', round(np.mean(abs(y_test-y_hat)), 2), "\n",
+                   'MAPE: ', round(np.mean(abs(y_test-y_hat)/y_test), 4), "\n",
+                   'RMSE: ', round(np.sqrt(np.mean((y_test-y_hat)**2)), 2), "\n"
+                   ' R2: ', round(metrics.r2_score(y_true = y_test,
+                                                   y_pred = y_hat),2)
+                   )
+    return output
+
+print_metrics(test_data['y_hat'], test_data['y_test'])
+
+
+
+feature_importance.reset_index().sort_values('index', ascending=0)
+
+
+#####
+## count routes
+#####
+
+customer_clean['route']=customer_clean['Original Port Of Loading'] + ' ' + customer_clean['Final Port Of Discharge']
+len(customer_clean['route'].unique())
+len(customer_clean['Carrier'].unique())
+
+
+
