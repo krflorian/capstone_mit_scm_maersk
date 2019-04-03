@@ -6,9 +6,9 @@ Created on Wed Dec 19 12:07:36 2018
 @author: Florian Krempl
 
 Capstone Project: Predicting Transit time with Machine Learning
-Partner Company: DAMCO/Maersk
 
 """
+
 import os
 import numpy as np
 import pandas as pd
@@ -57,12 +57,13 @@ customer_clean = load_data(customers,
 customer_clean = customer_clean.drop(customer_clean[customer_clean['Book Date'].str.slice(6,10) > '2500'].index)
 customer_clean = customer_clean.drop(customer_clean[customer_clean['Book Date'].str.contains('3016|6186|2528|7340|0006')].index)
 
+# convert date columns to date format
 for column in date_columns:
     print('start converting column', column, 'to datetime...')
     customer_clean[column] = customer_clean[column].str.slice(0,10).replace('-', '/', regex = True)
     customer_clean[column] = pd.to_datetime(customer_clean[column],
                                             format = '%d/%m/%Y')
-
+    
 print('\n', 'load test dataset...', '\n')
 
 customer_new = load_data(customers,
@@ -92,12 +93,10 @@ customer_clean['y_gate'] = (customer_clean['Container Unload From Vessel-Actual'
                             - customer_clean['Gate In Origin-Actual']).dt.days
 
 customer_clean['y_book'] = (customer_clean['Container Unload From Vessel-Actual']
-                            - customer_clean['Book Date']).dt.days
+                            - customer_clean['Expected Receipt Date']).dt.days
 
 customer_clean['y_receive'] = (customer_clean['Container Unload From Vessel-Actual']
                                - customer_clean['Actual Receipt Date']).dt.days
-
-
 
 print('finished calculating y columns')
 

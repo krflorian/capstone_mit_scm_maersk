@@ -2,7 +2,9 @@
 """
 Created on Tue Mar 12 10:01:00 2019
 
-@author: kr_fl
+@author: Florian Krempl 
+
+Capstone Project Predict Transit time with machine learning
 """
 
 import os
@@ -152,5 +154,15 @@ stat_poo['poo_mean'] = round(stat_poo['poo_mean'], 1)
 stat_poo['poo_std'] = round(stat_poo['poo_std'], 1)
 
 print('created poo statistics...')
+
+##############################################################################
+# get error metrics
+
+results_booking = pd.read_csv('data/results/booked_test_new.csv').set_index('Unnamed: 0')
+results_booking['error'] = results_booking['y_hat']-results_booking['y_book']
+results_booking = (results_booking.groupby(['Carrier','Original Port Of Loading','Final Port Of Discharge'])['error']
+                                  .quantile(q=[0.2,0.8])
+                                  .unstack(level=3)
+                                  .reset_index())
 
 print('ready to create model sets...')
