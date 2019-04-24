@@ -11,7 +11,7 @@ Capstone Project Predict Transit time with machine learning
 ## create rf model ##
 #####################
 
-def randomforest(max_depth, trees, criterion = 'mse', features = 'auto'):
+def randomforest(max_depth, trees, criterion = 'mse', features = 'auto', warmstart = False):
     regr = RandomForestRegressor(n_estimators = trees,
                              criterion = criterion,
                              random_state = 1992,
@@ -20,6 +20,7 @@ def randomforest(max_depth, trees, criterion = 'mse', features = 'auto'):
                              min_samples_split = 2,
                              min_samples_leaf = 10,
                              max_features = features,
+                             warm_start = warmstart,
                              #min_impurity_decrease = cp,
                              n_jobs = -1,
                              verbose = 100
@@ -130,6 +131,7 @@ def load_data(customers, folder, names):
                                     'ETD', 'ATD','ETA', 'ATA',
                                     'Container Unload From Vessel-Actual',
                                     'Equipment Number']])
+    
         # attach customer name column
         customer['customer'] = customer_name
         # customer['Final Port Of Discharge'] = customer['Final Port Of Discharge'].str.title()
@@ -162,6 +164,7 @@ def get_features_booking(df, model_training = False):
     # select features
     features = ['pod_mean', 'pod_std', 'poo_mean', 'poo_std', 'route_mean',
                 'Origin Service', 'holiday', 'quarter_z', 'ETP']
+    
     if model_training:
         features += ['Container Unload From Vessel-Actual', 'y_book']
         # drop impossible samples
@@ -169,14 +172,13 @@ def get_features_booking(df, model_training = False):
         new_transports = new_transports[(new_transports['y_book'] > 20) & (new_transports['y_book'] < 100)]
         return new_transports, features
     # create new df
-    new_transports = new_transports[features]
-    return new_transports
+    return new_transports, features
 
 # model received:
     
 def get_features_received(df, model_training = False):
     # create new columns
-    df = df[df['ETD'].isna() == False]
+    df = df[df['ETD'].notna()]
     df['departure_day'] = df.apply(lambda x: x['ETD'].strftime('%A'), axis=1)
     
     df['quarter'] = df['ETD'].dt.quarter
@@ -201,7 +203,7 @@ def get_features_received(df, model_training = False):
                                           new_transports['schedule'])    
     # select features
     features = ['pod_mean', 'pod_std', 'poo_mean', 'poo_std', 'poo_late', 'poo_latest',
-                'quarter_z', 'schedule', 'cap', 'Origin Service', 'holiday']
+                'quarter_z', 'schedule', 'Origin Service', 'holiday']
 
     if model_training:
         features += ['Container Unload From Vessel-Actual', 'y_receive']
@@ -209,8 +211,42 @@ def get_features_received(df, model_training = False):
         new_transports = new_transports[(new_transports['y_receive'] > 20) & (new_transports['y_receive'] < 70)]
         return new_transports, features
     # create new df
-    new_transports = new_transports[features]
-    return new_transports
+    return new_transports, features
+
+# model gate_in:
+
+def get_features_gate(df, model_training = False):
+    # create new columns
+    df = df[df['ETD'].isna() == False]
+    df['departure_day'] = df.apply(lambda x: x['ETD'].strftime('%A'), axis=1)
+    
+    df['quarter'] = df['ETD'].dt.quarter
+    df['Origin Service'] = np.where(df['Origin Service'] == 'CFS', 1, 0)
+    
+    # load other metrics
+    new_transports = (df.merge(stat_pod, on=['Final Port Of Discharge', 'customer'])
+                        .merge(stat_route, on=['Carrier', 'Original Port Of Loading', 'Final Port Of Discharge'])
+                        .merge(stat_schedule,
+                               on=['Carrier', 'Original Port Of Loading',
+                                   'Final Port Of Discharge', 'departure_day'],
+                               how = 'left')
+                        .merge(stat_quarter, on=['quarter'])
+                        .merge(stat_poo, on=['Original Port Of Loading', 'Shipper']))
+                        
+    new_transports['schedule'] = np.where(new_transports['schedule'].isna(),
+                                          new_transports['route_mean'],
+                                          new_transports['schedule'])    
+    # select features
+    features = ['pod_mean', 'pod_std', 'poo_mean', 'poo_std',
+                'quarter_z', 'schedule', 'Origin Service', 'holiday']
+
+    if model_training:
+        features += ['Container Unload From Vessel-Actual', 'y_gate']
+        # drop impossible samples
+        new_transports = new_transports[(new_transports['y_gate'] > 10) & (new_transports['y_gate'] < 100)]
+        return new_transports, features
+    # create new df
+    return new_transports, features
 
 
 # model departed
@@ -220,7 +256,7 @@ def get_features_departed(df, model_training = False):
     df['late_departure'] = np.where((df['ATD']-df['ETD']).dt.days > 0, 1, 0) # if vessel left after scheduled time
     df['quarter'] = df['ETD'].dt.quarter
     
-    print('created departed columns...')
+    print('created depart columns...')
     new_transports = (df.merge(stat_pod, on=['Final Port Of Discharge', 'customer'])
                         .merge(stat_route_y, on=['Carrier', 'Original Port Of Loading', 'Final Port Of Discharge'])
                         .merge(stat_route, on=['Carrier', 'Original Port Of Loading', 'Final Port Of Discharge'])
@@ -234,10 +270,10 @@ def get_features_departed(df, model_training = False):
                                           new_transports['route_mean'],
                                           new_transports['schedule'])
     
-    print('merged departed statistics...')
+    print('merged depart statistics...')
     
     features = ['quarter_z', 'pod_mean', 'pod_std', 'mean_all_departed',
-                'cap', 'late_departure', 'schedule']
+                'cap', 'late_departure', 'schedule']    
                                  
     if model_training:
         features += ['Container Unload From Vessel-Actual', 'y_depart']
@@ -245,8 +281,39 @@ def get_features_departed(df, model_training = False):
         new_transports = new_transports[(new_transports['y_depart'] > 10) & (new_transports['y_depart'] < 40)]
         return new_transports, features
     # create new df
-    new_transports = new_transports[features]
-    return new_transports
+    return new_transports, features
+
+########################################################################################
+    
+def get_cap(df):
+    # load us port capacity statistics (this one is a little more complicated than necessary... will change soon)
+    port_cap = pd.read_csv('data/statistics/summary_ports_us.csv',
+                           sep = ',', encoding='latin1')
+    port_cap = port_cap[['City', 'year', 'Arrival Date', 'cap']]
+    # get right date format
+    port_cap['Arrival Date'] = pd.to_datetime(port_cap['Arrival Date'], format = '%d.%m.%Y')
+    port_cap.index = port_cap['Arrival Date'].dt.dayofyear
+    # get rolling mean for 3 days for every year
+    port_cap = (port_cap.groupby(['City', 'year'])['cap']
+                        .rolling(3, center = True, min_periods = 1).mean()
+                        .reset_index())
+    port_cap.columns = ['City', 'year', 'doy', 'cap']
+    # get mean over all years
+    port_cap = port_cap.groupby(['City', 'doy'])['cap'].mean().reset_index()
+    
+    # get right string format
+    port_cap['City'] = port_cap['City'].str.upper()
+    df['doy'] = df['ETA'].dt.dayofyear
+    
+    ###############
+    ## merge dfs ##
+    ###############
+    print('merging dataframes')
+    df = (df.merge(port_cap, 
+                   left_on = ['Final Port Of Discharge', 'doy'],
+                   right_on = ['City', 'doy'],
+                   how = 'left'))
+    return df
 
 ########################################################################################
 print('loaded libraries and functions...')

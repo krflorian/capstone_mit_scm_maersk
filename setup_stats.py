@@ -36,9 +36,6 @@ stat = customer_clean[['Original Port Of Loading', 'Final Port Of Discharge',
 stat['route'] = (stat['ATA']-stat['ATD']).dt.days # transit time on water
 stat['pod'] = (stat['Container Unload From Vessel-Actual']-stat['ATA']).dt.days # time in port of destination
 
-#test['late_departure'] = np.where((test['ATD']-test['ETD']).dt.days > 0, 1, 0) # if vessel left after scheduled time
-#test['ETP'] = (test['Expected Receipt Date'] - test['Book Date']).dt.days   # expected time between booking and receival
-
 # sanity test
 stat = stat[stat['ATD'].isnull() == False]
 stat = stat[stat['cap'] > 0]
@@ -161,8 +158,25 @@ print('created poo statistics...')
 results_booking = pd.read_csv('data/results/booked_test_new.csv').set_index('Unnamed: 0')
 results_booking['error'] = results_booking['y_hat']-results_booking['y_book']
 results_booking = (results_booking.groupby(['Carrier','Original Port Of Loading','Final Port Of Discharge'])['error']
-                                  .quantile(q=[0.2,0.8])
+                                  .quantile(q=[0.1,0.9])
                                   .unstack(level=3)
                                   .reset_index())
-
+results_depart = pd.read_csv('data/results/route_depart_new.csv').set_index('Unnamed: 0')
+results_depart['error'] = results_depart['y_hat']-results_depart['y_depart']
+results_depart = (results_depart.groupby(['Carrier','Original Port Of Loading','Final Port Of Discharge'])['error']
+                                  .quantile(q=[0.1,0.9])
+                                  .unstack(level=3)
+                                  .reset_index())
+results_received = pd.read_csv('data/results/model_received_new.csv').set_index('Unnamed: 0')
+results_received['error'] = results_received['y_hat']-results_received['y_receive']
+results_received = (results_received.groupby(['Carrier','Original Port Of Loading','Final Port Of Discharge'])['error']
+                                  .quantile(q=[0.1,0.9])
+                                  .unstack(level=3)
+                                  .reset_index())
+results_gate = pd.read_csv('data/results/model_gate_new.csv').set_index('Unnamed: 0')
+results_gate['error'] = results_gate['y_hat']-results_gate['y_gate']
+results_gate = (results_gate.groupby(['Carrier','Original Port Of Loading','Final Port Of Discharge'])['error']
+                                  .quantile(q=[0.1,0.9])
+                                  .unstack(level=3)
+                                  .reset_index())
 print('ready to create model sets...')
