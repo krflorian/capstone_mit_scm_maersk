@@ -1,4 +1,4 @@
-# capstone_damco
+# Capstone Project MIT Supply Chain Management & Maersk
 Predicting Shipping Time with Machine Learning
 
 By Name(s): Antoine Jonquais, Florian Krempl
